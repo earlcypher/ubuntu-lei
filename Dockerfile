@@ -8,6 +8,7 @@ ENV NOVNC_PORT=8085
 ENV DISPLAY=:1
 
 # Install core dependencies and desktop environment components
+# Added dbus-x11, x11-xserver-utils, and shared-mime-info for XFCE stability
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     systemctl \
@@ -17,12 +18,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     python3 \
     python3-pip \
+    python3-setuptools \
     tini \
     xvfb \
     x11vnc \
     xfce4 \
     xfce4-goodies \
+    dbus-x11 \
+    x11-xserver-utils \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
+
+# Generate Machine ID (Crucial for DBUS and XFCE initialization inside Docker)
+RUN uuidgen > /etc/machine-id
 
 # Install ttyd (with architecture detection for x86_64 or arm64 nodes)
 RUN set -eux; \
@@ -46,24 +54,33 @@ RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
 # Create entrypoint script to manage background initialization and foreground execution loop
 RUN echo '#!/bin/bash\n\
 \n\
+# Ensure runtime environment updates standard out\n\
+unset SESSION_MANAGER\n\
+unset DBUS_SESSION_BUS_ADDRESS\n\
+\n\
 # Start Xvfb virtual framebuffer\n\
 Xvfb $DISPLAY -screen 0 1280x1024x24 &\n\
 \n\
-# Start XFCE4 Desktop\n\
-startxfce4 &\n\
+# Wait for virtual display framebuffer buffer allocation\n\
+until xset -q -display $DISPLAY > /dev/null 2>&1; do\n\
+    echo "Waiting for Xvfb server display creation..."\n\
+    sleep 0.5\n\
+done\n\
 \n\
-# Start x11vnc server\n\
-x11vnc -forever -shared -rfbport 5901 -display $DISPLAY -nopw &\n\
+# Start XFCE4 Desktop Session within structural subshell\n\
+/usr/bin/startxfce4 &\n\
+\n\
+# Start x11vnc server scraping the Xvfb session\n\
+x11vnc -forever -shared -rfbport 5901 -display $DISPLAY -nopw -bg -xkb &\n\
 \n\
 # Start noVNC proxy\n\
 /opt/novnc/utils/novnc_proxy --vnc localhost:5901 --listen $NOVNC_PORT &\n\
 \n\
 # Start code-server\n\
-# If an external PASSWORD variable exists, it uses it. Otherwise, it runs without auth.\n\
 if [ -n "$PASSWORD" ]; then\n\
-    PORT=$CODE_SERVER_PORT code-server --auth password &\n\
+    PORT=$CODE_SERVER_PORT code-server --auth password --bind-addr 0.0.0.0:$CODE_SERVER_PORT &\n\
 else\n\
-    PORT=$CODE_SERVER_PORT code-server --auth none &\n\
+    PORT=$CODE_SERVER_PORT code-server --auth none --bind-addr 0.0.0.0:$CODE_SERVER_PORT &\n\
 fi\n\
 \n\
 # Execute ttyd as primary foreground process to maintain container lifecycle\n\
