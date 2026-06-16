@@ -1,15 +1,14 @@
 FROM ubuntu:22.04
 
-# Railway overrides PORT; default to 7681
-ENV PORT=7681
+# Railway overrides PORT; default to 8080
+ENV PORT=8080
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install core dependencies, X11, XFCE4 desktop components, and web tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    wget \
-    curl \
-    git \
+# Install core dependencies, configure debconf for headless XFCE4, and install desktop components
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates wget curl git gnupg software-properties-common && \
+    echo "lightdm shared/default-x-display-manager select none" | debconf-set-selections && \
+    apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
@@ -45,7 +44,7 @@ RUN set -eux; \
     wget -qO /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/latest/download/${ttyd_asset}" \
     && chmod +x /usr/local/bin/ttyd
 
-# Create an execution script to launch XFCE4 desktop, VNC server, noVNC proxy, and code-server
+# Create an execution script to launch services
 RUN echo '#!/bin/bash\n\
 fastfetch || true\n\
 \n\
@@ -59,21 +58,21 @@ xfce4-session &\n\
 # Start x11vnc server\n\
 x11vnc -display :1 -nopw -forever -shared -bg -listen 127.0.0.1 -rfbport 5900 &\n\
 \n\
-# Start noVNC proxy to expose the XFCE4 session over web sockets on port 8080\n\
-/opt/novnc/utils/websockify/run.py --web /opt/novnc 8080 127.0.0.1:5900 &\n\
+# Start noVNC proxy to expose the XFCE4 session over web sockets on port 8585\n\
+/opt/novnc/utils/websockify/run.py --web /opt/novnc 8585 127.0.0.1:5900 &\n\
 \n\
 # Start code-server on port 8081\n\
 code-server --bind-addr 0.0.0.0:8081 --auth none &\n\
 \n\
-# Start ttyd terminal sharing on the assigned application port\n\
+# Start ttyd terminal sharing on the assigned application port (dynamically set by Railway to 8080)\n\
 exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "${PORT}" -c "${USERNAME}:${PASSWORD}" /bin/bash\n\
 ' > /usr/local/bin/entrypoint.sh \
     && chmod +x /usr/local/bin/entrypoint.sh
 
 RUN echo "fastfetch || true" >> /root/.bashrc
 
-# Expose ports for web terminal (PORT), noVNC (8080), and code-server (8081)
-EXPOSE 7681 8085 8081
+# Expose ports for web terminal (PORT), altered noVNC (8585), and code-server (8081)
+EXPOSE 8080 8585 8081
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
