@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:24.04.4
 
 # Configuration variables
 ENV TTYD_PORT=7681
