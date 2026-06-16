@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
-# Generate Machine ID using dbus-uuidgen (Fixes exit code 127 error)
-RUN dbus-uuidgen --ensure=/etc/machine-id
+# Fix blank machine-id issue and generate a valid ID
+RUN rm -f /etc/machine-id && dbus-uuidgen --ensure=/etc/machine-id
 
 # Install ttyd (with architecture detection for x86_64 or arm64 nodes)
 RUN set -eux; \
