@@ -8,7 +8,6 @@ ENV NOVNC_PORT=8085
 ENV DISPLAY=:1
 
 # Install core dependencies and desktop environment components
-# Added dbus-x11, x11-xserver-utils, and shared-mime-info for XFCE stability
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     systemctl \
@@ -29,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
-# Generate Machine ID (Crucial for DBUS and XFCE initialization inside Docker)
-RUN uuidgen > /etc/machine-id
+# Generate Machine ID using dbus-uuidgen (Fixes exit code 127 error)
+RUN dbus-uuidgen --ensure=/etc/machine-id
 
 # Install ttyd (with architecture detection for x86_64 or arm64 nodes)
 RUN set -eux; \
@@ -67,7 +66,7 @@ until xset -q -display $DISPLAY > /dev/null 2>&1; do\n\
     sleep 0.5\n\
 done\n\
 \n\
-# Start XFCE4 Desktop Session within structural subshell\n\
+# Start XFCE4 Desktop Session\n\
 /usr/bin/startxfce4 &\n\
 \n\
 # Start x11vnc server scraping the Xvfb session\n\
