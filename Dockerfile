@@ -5,7 +5,7 @@ FROM ubuntu:22.04
 # CODE_SERVER_PORT and NOVNC_PORT can be mapped to public domains in the Railway dashboard.
 ENV PORT=7681
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CODE_SERVER_PORT=8080
+ENV CODE_SERVER_PORT=8082
 ENV NOVNC_PORT=8085
 ENV DISPLAY=:1
 
