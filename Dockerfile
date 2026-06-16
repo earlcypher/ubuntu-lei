@@ -4,8 +4,9 @@ FROM ubuntu:22.04
 ENV TTYD_PORT=7681
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CODE_SERVER_PORT=3000
+ENV NOVNC_PORT=6080
 
-# Install core dependencies and CLI utilities
+# Install core dependencies, CLI utilities, XFCE desktop, VNC, and noVNC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     systemctl \
@@ -18,6 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     tini \
     dbus-x11 \
+    xfce4 \
+    xfce4-goodies \
+    tightvncserver \
+    novnc \
+    websockify \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix blank machine-id issue and generate a valid ID
@@ -40,6 +46,19 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh
 # Create entrypoint script to manage background initialization and foreground execution loop
 RUN echo '#!/bin/bash\n\
 \n\
+# Set up VNC password from the $PASSWORD variable, or use a default one\n\
+VNC_PASS=${PASSWORD:-vncpassword}\n\
+mkdir -p /root/.vnc\n\
+echo "$VNC_PASS" | vncpasswd -f > /root/.vnc/passwd\n\
+chmod 600 /root/.vnc/passwd\n\
+\n\
+# Clean up old VNC locks and start VNC server\n\
+rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1\n\
+vncserver :1 -geometry 1280x720 -depth 24\n\
+\n\
+# Start websockify proxy for noVNC\n\
+websockify --web=/usr/share/novnc/ "$NOVNC_PORT" localhost:5901 &\n\
+\n\
 # Start code-server\n\
 if [ -n "$PASSWORD" ]; then\n\
     PORT=$CODE_SERVER_PORT code-server --auth password --bind-addr 0.0.0.0:$CODE_SERVER_PORT &\n\
@@ -54,7 +73,7 @@ else\n\
     exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" /bin/bash\n\
 fi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
-EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT}
+EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT} ${NOVNC_PORT}
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/entrypoint.sh"]
