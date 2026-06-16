@@ -1,11 +1,9 @@
 FROM ubuntu:22.04
 
 # Configuration variables
-# Railway automatically overrides PORT at runtime. 
-# CODE_SERVER_PORT and NOVNC_PORT can be mapped to public domains in the Railway dashboard.
 ENV PORT=7681
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CODE_SERVER_PORT=8082
+ENV CODE_SERVER_PORT=8089
 ENV NOVNC_PORT=8085
 ENV DISPLAY=:1
 
@@ -59,7 +57,12 @@ x11vnc -forever -shared -rfbport 5901 -display $DISPLAY -nopw &\n\
 /opt/novnc/utils/novnc_proxy --vnc localhost:5901 --listen $NOVNC_PORT &\n\
 \n\
 # Start code-server\n\
-code-server --bind-addr 0.0.0.0:$CODE_SERVER_PORT --auth none &\n\
+# If an external PASSWORD variable exists, it uses it. Otherwise, it runs without auth.\n\
+if [ -n "$PASSWORD" ]; then\n\
+    code-server --bind-addr 0.0.0.0:$CODE_SERVER_PORT --auth password &\n\
+else\n\
+    code-server --bind-addr 0.0.0.0:$CODE_SERVER_PORT --auth none &\n\
+fi\n\
 \n\
 # Execute ttyd as primary foreground process to maintain container lifecycle\n\
 if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then\n\
