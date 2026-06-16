@@ -1,15 +1,17 @@
 FROM ubuntu:22.04
 
 # Configuration variables
-ENV PORT=7681
+ENV TTYD_PORT=7681
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CODE_SERVER_PORT=8089
+ENV CODE_SERVER_PORT=3000
 ENV NOVNC_PORT=8085
 ENV DISPLAY=:1
 
 # Install core dependencies and desktop environment components
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    systemctl \
+    sudo \
     wget \
     curl \
     git \
@@ -59,19 +61,19 @@ x11vnc -forever -shared -rfbport 5901 -display $DISPLAY -nopw &\n\
 # Start code-server\n\
 # If an external PASSWORD variable exists, it uses it. Otherwise, it runs without auth.\n\
 if [ -n "$PASSWORD" ]; then\n\
-    code-server --bind-addr 0.0.0.0:$CODE_SERVER_PORT --auth password &\n\
+    PORT=$CODE_SERVER_PORT code-server --auth password &\n\
 else\n\
-    code-server --bind-addr 0.0.0.0:$CODE_SERVER_PORT --auth none &\n\
+    PORT=$CODE_SERVER_PORT code-server --auth none &\n\
 fi\n\
 \n\
 # Execute ttyd as primary foreground process to maintain container lifecycle\n\
 if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then\n\
-    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$PORT" -c "$USERNAME:$PASSWORD" /bin/bash\n\
+    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "TTYD_PORT" -c "$USERNAME:$PASSWORD" /bin/bash\n\
 else\n\
-    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$PORT" /bin/bash\n\
+    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "TTYD_PORT" /bin/bash\n\
 fi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
-EXPOSE ${PORT} ${CODE_SERVER_PORT} ${NOVNC_PORT}
+EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT} ${NOVNC_PORT}
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/entrypoint.sh"]
