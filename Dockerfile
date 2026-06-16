@@ -4,10 +4,8 @@ FROM ubuntu:22.04
 ENV TTYD_PORT=7681
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CODE_SERVER_PORT=3000
-ENV NOVNC_PORT=8085
-ENV DISPLAY=:1
 
-# Install core dependencies and desktop environment components
+# Install core dependencies and CLI utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     systemctl \
@@ -19,13 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-setuptools \
     tini \
-    xvfb \
-    x11vnc \
-    xfce4 \
-    xfce4-goodies \
     dbus-x11 \
-    x11-xserver-utils \
-    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix blank machine-id issue and generate a valid ID
@@ -45,35 +37,8 @@ RUN set -eux; \
 # Install code-server
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 
-# Install noVNC and websockify proxy
-RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
-    && git clone --depth 1 https://github.com/novnc/websockify /opt/novnc/utils/websockify \
-    && ln -s /opt/novnc/vnc.html /opt/novnc/index.html
-
 # Create entrypoint script to manage background initialization and foreground execution loop
 RUN echo '#!/bin/bash\n\
-\n\
-# Ensure runtime environment updates standard out\n\
-unset SESSION_MANAGER\n\
-unset DBUS_SESSION_BUS_ADDRESS\n\
-\n\
-# Start Xvfb virtual framebuffer\n\
-Xvfb $DISPLAY -screen 0 1280x1024x24 &\n\
-\n\
-# Wait for virtual display framebuffer buffer allocation\n\
-until xset -q -display $DISPLAY > /dev/null 2>&1; do\n\
-    echo "Waiting for Xvfb server display creation..."\n\
-    sleep 0.5\n\
-done\n\
-\n\
-# Start XFCE4 Desktop Session\n\
-/usr/bin/startxfce4 &\n\
-\n\
-# Start x11vnc server scraping the Xvfb session\n\
-x11vnc -forever -shared -rfbport 5901 -display $DISPLAY -nopw -bg -xkb &\n\
-\n\
-# Start noVNC proxy\n\
-/opt/novnc/utils/novnc_proxy --vnc localhost:5901 --listen $NOVNC_PORT &\n\
 \n\
 # Start code-server\n\
 if [ -n "$PASSWORD" ]; then\n\
@@ -89,7 +54,7 @@ else\n\
     exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" /bin/bash\n\
 fi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
-EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT} ${NOVNC_PORT}
+EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT}
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/entrypoint.sh"]
