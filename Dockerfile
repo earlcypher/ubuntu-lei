@@ -68,9 +68,9 @@ fi\n\
 \n\
 # Execute ttyd as primary foreground process to maintain container lifecycle\n\
 if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then\n\
-    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "TTYD_PORT" -c "$USERNAME:$PASSWORD" /bin/bash\n\
+    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" -c "$USERNAME:$PASSWORD" /bin/bash\n\
 else\n\
-    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "TTYD_PORT" /bin/bash\n\
+    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" /bin/bash\n\
 fi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT} ${NOVNC_PORT}
