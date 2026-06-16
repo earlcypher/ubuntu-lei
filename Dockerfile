@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:latest
 
 # Configuration variables
 ENV TTYD_PORT=7681
@@ -8,7 +8,6 @@ ENV CODE_SERVER_PORT=3000
 # Install core dependencies and CLI utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    systemctl \
     sudo \
     wget \
     curl \
@@ -17,18 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-setuptools \
     tini \
-    dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
-
-# Fix blank machine-id issue and generate a valid ID
-RUN rm -f /etc/machine-id && dbus-uuidgen --ensure=/etc/machine-id
 
 # Install ttyd (with architecture detection for x86_64 or arm64 nodes)
 RUN set -eux; \
     arch="$(uname -m)"; \
     case "$arch" in \
-      x86_64|amd64) ttyd_asset="ttyd.x86_64" ;; \
-      aarch64|arm64) ttyd_asset="ttyd.aarch64" ;; \
+      x86_64) ttyd_asset="ttyd.x86_64" ;; \
+      aarch64) ttyd_asset="ttyd.aarch64" ;; \
       *) echo "Unsupported arch: $arch" >&2; exit 1 ;; \
     esac; \
     wget -qO /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/latest/download/${ttyd_asset}" \
@@ -37,22 +32,26 @@ RUN set -eux; \
 # Install code-server
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 
-# Create entrypoint script to manage background initialization and foreground execution loop
-RUN echo '#!/bin/bash\n\
-\n\
-# Start code-server\n\
-if [ -n "$PASSWORD" ]; then\n\
-    PORT=$CODE_SERVER_PORT code-server --auth password --bind-addr 0.0.0.0:$CODE_SERVER_PORT &\n\
-else\n\
-    PORT=$CODE_SERVER_PORT code-server --auth none --bind-addr 0.0.0.0:$CODE_SERVER_PORT &\n\
-fi\n\
-\n\
-# Execute ttyd as primary foreground process to maintain container lifecycle\n\
-if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then\n\
-    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" -c "$USERNAME:$PASSWORD" /bin/bash\n\
-else\n\
-    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" /bin/bash\n\
-fi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
+# Create entrypoint script using a clean here-document pattern
+RUN cat << 'EOF' > /usr/local/bin/entrypoint.sh
+#!/bin/bash
+
+# Start code-server
+if [ -n "$PASSWORD" ]; then
+    PORT=$CODE_SERVER_PORT code-server --auth password --bind-addr 0.0.0.0:$CODE_SERVER_PORT &
+else
+    PORT=$CODE_SERVER_PORT code-server --auth none --bind-addr 0.0.0.0:$CODE_SERVER_PORT &
+fi
+
+# Execute ttyd as primary foreground process to maintain container lifecycle
+if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" -c "$USERNAME:$PASSWORD" /bin/bash
+else
+    exec /usr/local/bin/ttyd --writable -i 0.0.0.0 -p "$TTYD_PORT" /bin/bash
+fi
+EOF
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE ${TTYD_PORT} ${CODE_SERVER_PORT}
 
